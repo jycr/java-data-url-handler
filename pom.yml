@@ -1,0 +1,201 @@
+modelEncoding: UTF-8
+modelVersion: 4.0.0
+
+groupId: io.github.jycr
+artifactId: java-data-url-handler
+version: ${revision}
+packaging: jar
+
+name: Java data url handler
+description: >
+  Java "data" URL scheme handler.
+
+url: https://github.com/jycr/java-data-url-handler
+
+inceptionYear: 2024
+
+organization:
+  name: jycr
+  url: https://github.com/jycr
+
+licenses:
+  - name: MIT
+    distribution: repo
+    url: https://opensource.org/license/mit
+
+# Mandatory information to be able to publish to Maven Central:
+# https://central.sonatype.org/publish/requirements/#developer-information
+developers:
+  - name: JY Cr
+    email: jycr@users.noreply.github.com
+    organization: jycr
+    organizationUrl: https://github.com/jycr
+
+scm:
+  connection: scm:git:https://github.com/jycr/java-data-url-handler
+  developerConnection: scm:git:https://github.com/jycr/java-data-url-handler
+  url: https://github.com/jycr/java-data-url-handler
+
+issueManagement:
+  system: GitHub
+  url: https://github.com/jycr/java-data-url-handler/issues
+
+properties:
+  maven.compiler.release: 11
+
+  # Default version when maven-git-versioning-extension is deactivated
+  # cf. https://github.com/qoomon/maven-git-versioning-extension#intellij&#45;&#45;-multi-modules-projects
+  revision: 9999-SNAPSHOT
+
+  # cf. https://maven.apache.org/guides/mini/guide-reproducible-builds.html
+  project.build.outputTimestamp: ${git.commit.timestamp.datetime}
+  project.build.sourceEncoding: UTF-8
+  project.reporting.outputEncoding: ${project.build.sourceEncoding}
+  maven.compiler.encoding: ${project.build.sourceEncoding}
+  maven.compiler.source: ${maven.compiler.release}
+  maven.compiler.target: ${maven.compiler.release}
+
+  # see: https://issues.apache.org/jira/browse/SUREFIRE-951?focusedCommentId=15929677&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-15929677
+  additionalTestArgLine: -Dfile.encoding=${project.build.sourceEncoding}
+
+  # SonarCloud configuration
+  sonar.host.url: https://sonarcloud.io
+  sonar.organization: jycr
+  sonar.projectKey: jycr_java-data-url-handler
+  sonar.java.source: ${maven.compiler.source}
+  sonar.java.target: ${maven.compiler.target}
+
+  # Maven central configuration
+  staging.autoReleaseAfterClose: true
+
+dependencyManagement:
+  dependencies:
+    - groupId: org.junit
+      artifactId: junit-bom
+      version: 5.10.2
+      type: pom
+      scope: import
+
+dependencies:
+  - { groupId: org.junit.jupiter, artifactId: junit-jupiter, scope: test }
+  - { groupId: org.assertj, artifactId: assertj-core, scope: test, version: 3.26.3 }
+
+build:
+  plugins:
+    - groupId: org.apache.maven.plugins
+      artifactId: maven-enforcer-plugin
+      version: 3.5.0
+      executions:
+        - id: enforce-project-requirements
+          goals:
+            - enforce
+          configuration:
+            rules:
+              requireJavaVersion:
+                # maven-git-versioning-extension is compatible with Java >= 11
+                # URL serviceLoader is compatible with Java >= 11
+                version: 11
+              requireMavenVersion:
+                version: 3.8
+    - groupId: org.apache.maven.plugins
+      artifactId: maven-compiler-plugin
+      version: 3.13.0
+      configuration:
+        compilerArgs:
+          arg: '-Xlint:all'
+
+    - groupId: org.jacoco
+      artifactId: jacoco-maven-plugin
+      version: 0.8.12
+      executions:
+        - id: jacoco-tu
+          goals: [ prepare-agent ]
+          configuration:
+            propertyName: utCoverageAgent
+
+        - id: jacoco-ti
+          goals: [ prepare-agent-integration ]
+
+          configuration:
+            propertyName: itCoverageAgent
+
+        - id: jacoco-report
+          goals: [ report, report-integration ]
+          configuration:
+            formats: [ XML ]
+
+        - id: jacoco-report-aggregate
+          phase: verify
+          goals: [ report-aggregate ]
+
+    - groupId: org.apache.maven.plugins
+      artifactId: maven-surefire-plugin
+      version: 3.2.5
+      executions:
+        - id: default-test
+          goals: [ test ]
+          configuration:
+            argLine: ${additionalTestArgLine} ${utCoverageAgent}
+
+    - groupId: org.apache.maven.plugins
+      artifactId: maven-failsafe-plugin
+      version: 3.2.5
+      executions:
+        - id: default
+          configuration:
+            argLine: ${additionalTestArgLine} ${itCoverageAgent}
+
+    - groupId: org.apache.maven.plugins
+      artifactId: maven-source-plugin
+      version: 3.3.1
+      executions:
+        - id: attach-sources
+          goals: [ jar-no-fork ]
+
+    - groupId: org.apache.maven.plugins
+      artifactId: maven-javadoc-plugin
+      version: 3.8.0
+      executions:
+        - id: attach-javadocs
+          goals: [ jar ]
+
+profiles:
+  - id: sign-artifacts
+    activation:
+      property:
+        name: env.MAVEN_GPG_PASSPHRASE
+    build:
+      plugins:
+        - groupId: org.apache.maven.plugins
+          artifactId: maven-gpg-plugin
+          version: 3.2.5
+          # For publishing in Maven Central, GPG key must be published to one of following servers:
+          #  - keyserver.ubuntu.com
+          #  - keys.openpgp.org
+          #  - pgp.mit.edu
+          # For more information: https://central.sonatype.org/publish/requirements/gpg/#distributing-your-public-key
+          executions:
+            - id: sign-artifacts
+              phase: verify
+              goals: [ sign ]
+              configuration:
+                gpgArguments: !!pairs
+                  - arg: --pinentry-mode
+                  - arg: loopback
+
+  - id: maven-central-publishing
+    distributionManagement:
+      snapshotRepository:
+        id: ossrh
+        layout: default
+        uniqueVersion: true
+        url: https://s01.oss.sonatype.org/content/repositories/snapshots
+    build:
+      plugins:
+        - groupId: org.sonatype.plugins
+          artifactId: nexus-staging-maven-plugin
+          version: 1.7.0
+          extensions: true
+          configuration:
+            serverId: ossrh
+            nexusUrl: https://s01.oss.sonatype.org
