@@ -1,103 +1,104 @@
 package io.github.jycr.javadataurlhandler;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.util.Base64;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
 /**
- * The data scheme URLConnection.
- * <p>The data URI scheme Data protocol Syntax:</p>
- * <pre>data:[<mediatype>][;base64],<data></pre>
+ * <p>The data scheme URLConnection.</p>
+ * <p>Syntax of data URL scheme:</p>
+ * <pre>
+ * dataurl    := "data:" [ mediatype ] [ ";base64" ] "," data
+ * mediatype  := [ type "/" subtype ] *( ";" parameter )
+ * data       := *urlchar
+ * parameter  := attribute "=" value
+ * </pre>
  *
  * @see <a href="https://www.rfc-editor.org/rfc/rfc2397#section-2">RFC-2397</a>
  * @see <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URLs">mdn web docs - Data URLs</a>
  */
 public class DataUriConnection extends URLConnection {
 
-	/**
-	 * Syntax of data URL scheme:
-	 * <pre>
-	 * dataurl    := "data:" [ mediatype ] [ ";base64" ] "," data
-	 * mediatype  := [ type "/" subtype ] *( ";" parameter )
-	 * data       := *urlchar
-	 * parameter  := attribute "=" value
-	 * </pre>
-	 */
-	private static final Pattern DATA_URL_SCHEME_PATTERN = Pattern.compile("data:(<mediatype>?(<contentType>?.*?/.*?)?(?:;(<paramKey>?.*?)=(<paramValue>?.*?))?)(?:;(<base64Flag>?base64)?)?,(<data>?.*)");
-
 	private static final Charset DEFAULT_CONTENT_CHARSET = US_ASCII;
-	/**
-	 * Default mime type for data protocol.
-	 * See: <a href="https://www.rfc-editor.org/rfc/rfc2397#section-2">RFC-2397 - Description</a>
-	 */
-	private static final String DEFAULT_MEDIATYPE = "text/plain;charset=" + DEFAULT_CONTENT_CHARSET.name();
+	private static final String DEFAULT_MEDIATYPE = "text/plain";
 
-	private final boolean valid;
 	private final Charset charset;
 	private final boolean isBase64;
 	private final String data;
-	private final String mediatype;
+	private final String contentType;
 
 	public DataUriConnection(final URL url) throws MalformedURLException {
 		super(url);
-		final Matcher matcher = DATA_URL_SCHEME_PATTERN.matcher(url.toString());
-		this.valid = matcher.matches();
-		if (!this.valid) {
+		String urlString = url.toString();
+		if (!urlString.startsWith("data:")) {
 			throw new MalformedURLException("Invalid data URL: " + url);
 		}
-		this.data = matcher.group("data");
 
-		String mediatypeGroup = matcher.group("mediatype");
-		this.mediatype = (mediatypeGroup != null && !mediatypeGroup.isEmpty()) ? mediatypeGroup : DEFAULT_MEDIATYPE;
-		this.isBase64 = "base64".equals(matcher.group("base64Flag"));
+		int commaIndex = urlString.indexOf(',');
+		if (commaIndex == -1) {
+			throw new MalformedURLException("Invalid data URL: " + url);
+		}
 
-		String paramKey = matcher.group("paramKey");
-		String paramValue = matcher.group("paramValue");
-		this.charset = "charset".equals(paramKey) ? Charset.forName(paramValue) : DEFAULT_CONTENT_CHARSET;
+		String metadata = urlString.substring(5, commaIndex);
+		this.data = urlString.substring(commaIndex + 1);
+
+		final String[] parts = metadata.split(";");
+		final String mediatype = parts.length > 0 && !parts[0].isEmpty() ? parts[0] : DEFAULT_MEDIATYPE;
+
+		boolean base64Flag = false;
+		Charset extractedCharset = DEFAULT_CONTENT_CHARSET;
+		for (String part : parts) {
+			if ("base64".equals(part)) {
+				base64Flag = true;
+			} else if (part.startsWith("charset=")) {
+				extractedCharset = Charset.forName(part.substring(8));
+			}
+		}
+		this.isBase64 = base64Flag;
+		this.charset = extractedCharset;
+		this.contentType = mediatype + (isText(mediatype) ? ";charset=" + this.charset.name() : "");
+		this.connected = true;
+	}
+
+	private static boolean isText(String mediatype) {
+		return mediatype != null && (mediatype.startsWith("text/") || mediatype.endsWith("+xml"));
 	}
 
 	@Override
 	public void connect() {
-		if (this.valid) {
-			this.connected = true;
-		}
+		this.connected = true;
 	}
 
 	@Override
-	public InputStream getInputStream() throws IOException {
-		if (!connected) {
-			throw new IOException();
-		}
+	public InputStream getInputStream() {
 		return new ByteArrayInputStream(getData());
 	}
 
-	/**
-	 * <p>Returns the value of the content-type defined in data URL.</p>
-	 * <p>This value is optional and if not defined, value is <code>{@value #DEFAULT_MEDIATYPE}</code></p>
-	 */
 	@Override
 	public String getContentType() {
-		if (!connected) {
-			return null;
-		}
-		return mediatype;
+		return contentType;
 	}
 
-	private byte[] getData() throws UnsupportedEncodingException {
-		if (isBase64) {
-			return Base64.getDecoder().decode(data);
+	private byte[] getData() {
+		return isBase64 ? Base64.getDecoder().decode(data) : URLDecoder.decode(data, charset).getBytes(charset);
+	}
+
+	Charset getCharset() {
+		return charset;
+	}
+
+	@Override
+	public String getHeaderField(String name) {
+		if ("Content-Length".equalsIgnoreCase(name)) {
+			return String.valueOf(getData().length);
 		}
-		return URLDecoder.decode(data, charset).getBytes(data);
+		return null;
 	}
 }
