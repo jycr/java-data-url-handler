@@ -199,3 +199,4 @@ profiles:
           configuration:
             serverId: ossrh
             nexusUrl: https://s01.oss.sonatype.org
+            autoReleaseAfterClose: true
