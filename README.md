@@ -5,11 +5,11 @@
 
 # java-data-url-handler
 
-When adding this library as a dependency in your project, you will be able to handle "data URLs" ([RFC-2397](https://datatracker.ietf.org/doc/html/rfc2397)) in your application.
+When adding this library in your classpath, you will be able to handle "data URLs" ([RFC-2397](https://datatracker.ietf.org/doc/html/rfc2397)) in your application.
 
 ## Prerequisites
 
-You need Java >= 11 to use this library.
+You need Java ≥ 11 to use this library.
 
 ## Usage
 
@@ -47,3 +47,18 @@ The output of the code above will be:
 ```
 Hello, World!
 ```
+
+## Add dependency to your project
+
+To add this library to your Maven project:
+
+```xml
+<dependency>
+    <groupId>io.github.jycr</groupId>
+    <artifactId>java-data-url-handler</artifactId>
+    <version>${java-data-url-handler.version}</version>
+</dependency>
+```
+
+Latest available version: ![Version on Maven Central](https://img.shields.io/maven-central/v/io.github.jycr/java-data-url-handler?style=flat-square&label=%20&color=%23FFFFFF
+)
